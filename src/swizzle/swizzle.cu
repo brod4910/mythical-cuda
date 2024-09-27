@@ -6,18 +6,19 @@
 template <int TILE_Y = 32, int TILE_X = 32>
 __global__ void swizzle_transpose(float *A, int rows, int cols, float *B) {
   __shared__ float tile[TILE_Y][TILE_X];
-  int r = blockDim.y * blockIdx.y + threadIdx.y;
-  int c = blockDim.x * blockIdx.x + threadIdx.x;
-  int A_linear_idx = r * cols + c;
+  int r = blockDim.y * blockIdx.y + threadIdx.y; // row = (32 * by) + ty
+  int c = blockDim.x * blockIdx.x + threadIdx.x; // col = (32 * bx) + tx
+  int A_linear_idx = r * cols + c;               // linear 1-D index
 
   int swizzle_idx = (r ^ c) % TILE_X; // mouldo columns to ensure valid indices
 
   tile[r][swizzle_idx] = A[A_linear_idx];
 
   __syncthreads();
-  int r_out = blockDim.x * blockIdx.x + threadIdx.y;
-  int c_out = blockDim.y * blockIdx.y + threadIdx.x;
-  int B_linear_idx = c_out * rows + r_out;
+
+  int r_out = blockDim.x * blockIdx.x + threadIdx.y; // row = (32 * bx) + ty
+  int c_out = blockDim.y * blockIdx.y + threadIdx.x; // col = (32 * by) + tx
+  int B_linear_idx = c_out * rows + r_out; // tranpose linear 1-D index
 
   B[B_linear_idx] = tile[r][swizzle_idx];
 }

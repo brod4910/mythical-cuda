@@ -1,4 +1,5 @@
 #include <array>
+#include <iomanip>
 #include <iostream>
 #include <string>
 #include <tuple>
@@ -51,11 +52,11 @@ template <typename T> void print_matrix(T *matrix, int rows, int cols) {
   for (int r = 0; r < rows; ++r) {
     auto COLOR = colorLUT[r % 32];
 
-    std::cout << COLOR << "[";
+    std::cout << "[ " << COLOR;
     for (int c = 0; c < cols; ++c) {
-      std::cout << matrix[r * cols + c] << " ";
+      std::cout << std::setw(2) << matrix[r * cols + c] << " ";
     }
-    std::cout << "]" << RESET << std::endl;
+    std::cout << RESET << "]" << std::endl;
   }
 }
 
@@ -64,17 +65,14 @@ template <typename T> void print_swizzle_matrix(T *matrix, int rows, int cols) {
   auto RESET = colorLUT[32];
 
   for (int r = 0; r < rows; ++r) {
+    std::cout << "[ ";
     for (int c = 0; c < cols; ++c) {
       int swizzle_idx = (r ^ c) % 32;
       auto COLOR = colorLUT[swizzle_idx];
 
-      if (c == 0) {
-        std::cout << COLOR << "[";
-      }
-
-      std::cout << matrix[r * cols + c] << " ";
+      std::cout << COLOR << std::setw(2) << matrix[r * cols + c] << " ";
     }
-    std::cout << "]" << RESET << std::endl;
+    std::cout << RESET << "]" << std::endl;
   }
 }
 
