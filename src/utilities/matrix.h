@@ -68,7 +68,10 @@ template <typename T> void print_swizzle_matrix(T *matrix, int rows, int cols) {
       int swizzle_idx = (r ^ c) % 32;
       auto COLOR = colorLUT[swizzle_idx];
 
-      std::cout << COLOR << "[";
+      if (c == 0) {
+        std::cout << COLOR << "[";
+      }
+
       std::cout << matrix[r * cols + c] << " ";
     }
     std::cout << "]" << RESET << std::endl;

@@ -1,6 +1,8 @@
 #include <cuda_runtime.h>
 #include <iostream>
 
+#include "matrix.h"
+
 template <int TILE_Y = 32, int TILE_X = 32>
 __global__ void swizzle_transpose(float *A, int rows, int cols, float *B) {
   __shared__ float tile[TILE_Y][TILE_X];
@@ -38,7 +40,7 @@ int main() {
   std::cout << "Matrix A: " << std::endl;
   print_matrix(A, rows, cols);
 
-  float *A_device, *B_device, *A_swizzle, *B_swizzle;
+  float *A_device, *B_device;
 
   cudaMalloc((void **)&A_device, size_bytes);
   cudaMalloc((void **)&B_device, size_bytes);

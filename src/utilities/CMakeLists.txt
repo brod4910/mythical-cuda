@@ -10,10 +10,7 @@ file(GLOB UTILITIES_SOURCES
 )
 
 # Create a static or shared library (choose either STATIC or SHARED)
-add_library(utilities STATIC ${UTILITIES_SOURCES})
-
-# Optionally, set CUDA properties if needed
-set_target_properties(utilities PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+add_library(utilities INTERFACE)
 
 # Include directories for the utilities (so other projects can use its headers)
-target_include_directories(utilities PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(utilities INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
