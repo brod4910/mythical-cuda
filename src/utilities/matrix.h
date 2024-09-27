@@ -45,12 +45,17 @@ constexpr std::array<const char *, 33> createColorLUT() {
   }};
 }
 
-template <typename T> void print_matrix(T *matrix, int rows, int cols) {
+/*
+  Print the input matrix with color codes. The color codes denote a warp reading a row from global memory.
+*/
+template <typename T, int TILE_Y = 32> void print_matrix(T *matrix, int rows, int cols) {
+  static_assert(TILE_Y <= 32, "TILE_Y must be less than 32.");
+
   constexpr auto colorLUT = createColorLUT();
   auto RESET = colorLUT[32];
 
   for (int r = 0; r < rows; ++r) {
-    auto COLOR = colorLUT[r % 32];
+    auto COLOR = colorLUT[r % TILE_Y];
 
     std::cout << "[ " << COLOR;
     for (int c = 0; c < cols; ++c) {
@@ -60,14 +65,16 @@ template <typename T> void print_matrix(T *matrix, int rows, int cols) {
   }
 }
 
-template <typename T> void print_swizzle_matrix(T *matrix, int rows, int cols) {
+template <typename T, int TILE_X = 32> void print_swizzle_matrix(T *matrix, int rows, int cols) {
+  static_assert(TILE_X <= 32, "TILE_X must be less than 32.");
+  
   constexpr auto colorLUT = createColorLUT();
   auto RESET = colorLUT[32];
 
   for (int r = 0; r < rows; ++r) {
     std::cout << "[ ";
     for (int c = 0; c < cols; ++c) {
-      int swizzle_idx = (r ^ c) % 32;
+      int swizzle_idx = (r ^ c) % TILE_X;
       auto COLOR = colorLUT[swizzle_idx];
 
       std::cout << COLOR << std::setw(2) << matrix[r * cols + c] << " ";

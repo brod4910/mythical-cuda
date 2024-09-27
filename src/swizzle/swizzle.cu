@@ -10,9 +10,10 @@ __global__ void swizzle_transpose(float *A, int rows, int cols, float *B) {
   int c = blockDim.x * blockIdx.x + threadIdx.x; // col = (32 * bx) + tx
   int A_linear_idx = r * cols + c;               // linear 1-D index
 
-  int swizzle_idx = (r ^ c) % TILE_X; // mouldo columns to ensure valid indices
+  int swizzle_idx = (r ^ c) % TILE_X; // mouldo swizzle index by TILE_X to ensure valid indices
+  int tile_x = r % TILE_Y;            // modulo rows by TILE_Y to ensure valid indices
 
-  tile[r][swizzle_idx] = A[A_linear_idx];
+  tile[tile_x][swizzle_idx] = A[A_linear_idx];
 
   __syncthreads();
 
@@ -20,14 +21,14 @@ __global__ void swizzle_transpose(float *A, int rows, int cols, float *B) {
   int c_out = blockDim.y * blockIdx.y + threadIdx.x; // col = (32 * by) + tx
   int B_linear_idx = c_out * rows + r_out; // tranpose linear 1-D index
 
-  B[B_linear_idx] = tile[r][swizzle_idx];
+  B[B_linear_idx] = tile[tile_x][swizzle_idx];
 }
 
 int div_up(int a, int b) { return (a + b - 1) / b; }
 
 int main() {
   constexpr int rows = 64;
-  constexpr int cols = 32;
+  constexpr int cols = 64;
   constexpr int size = rows * cols;
   constexpr int size_bytes = size * sizeof(float);
 
@@ -39,7 +40,7 @@ int main() {
 
   initialize_matrix(A, rows, cols);
   std::cout << "Matrix A: " << std::endl;
-  print_matrix(A, rows, cols);
+  print_matrix<float, TILE_Y>(A, rows, cols);
 
   float *A_device, *B_device;
 
@@ -58,7 +59,7 @@ int main() {
   cudaMemcpy(B, B_device, size_bytes, cudaMemcpyDeviceToHost);
 
   std::cout << "Matrix B: " << std::endl;
-  print_swizzle_matrix(B, cols, rows);
+  print_swizzle_matrix<float, TILE_X>(B, cols, rows);
 
   cudaFree(A_device);
   cudaFree(B_device);

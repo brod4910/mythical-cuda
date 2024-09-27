@@ -12,5 +12,9 @@ set_target_properties(swizzle PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
 )
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(swizzle PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-G>)
+endif()
+
 # Optionally, set include directories for this subproject
 target_include_directories(swizzle PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
