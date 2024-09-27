@@ -5,7 +5,7 @@ project(Swizzle LANGUAGES CXX CUDA)
 add_executable(swizzle swizzle.cu)
 
 # Link necessary libraries (e.g., CUDA)
-target_link_libraries(swizzle PRIVATE cudart)
+target_link_libraries(swizzle PRIVATE cudart utilities)
 
 # Optionally, set CUDA properties like separable compilation
 set_target_properties(swizzle PROPERTIES

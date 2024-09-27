@@ -13,6 +13,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Optionally, include CUDA directories
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
+# Add the utilities directory and build the utilities library
+add_subdirectory(src/utilities)
+
 # Add subdirectories (each of these subdirectories contains its own CMakeLists.txt)
 add_subdirectory(src/swizzle)
 
