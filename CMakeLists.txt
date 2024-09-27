@@ -14,7 +14,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
 # Add subdirectories (each of these subdirectories contains its own CMakeLists.txt)
-add_subdirectory(src/data-swizzling)
+add_subdirectory(src/swizzle)
 
 # Optionally, if you want to create a shared library or utility to be used by all subprojects
 # add_library(MySharedLib src/shared_code.cu src/shared_code.h)
