@@ -22,6 +22,8 @@ __global__ void swizzle_transpose(float *A, int rows, int cols, float *B) {
 
   __syncthreads();
 
+  // TODO: Fix indices of destination, currently transposing the tile 
+  // and not the whole matrix
   int r_out = blockDim.x * blockIdx.x + threadIdx.y; // row = (32 * bx) + ty
   int c_out = blockDim.y * blockIdx.y + threadIdx.x; // col = (32 * by) + tx
   int B_linear_idx = c_out * rows + r_out; // tranpose linear 1-D index
@@ -41,36 +43,36 @@ swizzle_bilinear_interpolation(const T *__restrict__ A, int input_rows,
   int r = blockDim.y * blockIdx.y + threadIdx.y;
   int c = blockDim.x * blockIdx.x + threadIdx.x;
 
-
-  // int swizzle_idx =
-  //     (r ^ c) %
-  //     TILE_X; // mouldo swizzle index by TILE_X to ensure valid indices
-  int tile_x = c % TILE_X;
+  int swizzle_idx =
+      (r ^ c) %
+      TILE_X; // mouldo swizzle index by TILE_X to ensure valid indices
+  // int tile_x = c % TILE_X;
   int tile_y = r % TILE_Y; // modulo rows by TILE_Y to ensure valid indices
 
   // ATile[tile_y][tile_x] = __ldg(&A[r * input_cols + c]); // possibly remove ldg
-  ATile[tile_y][tile_x] = A[r * input_cols + c]; // possibly remove ldg
+  ATile[tile_y][swizzle_idx] = A[r * input_cols + c];
 
   __syncthreads();
 
-  float r_offset = r * scale_y;
-  float c_offset = c * scale_x;
+  float x = c * scale_x;
+  float y = r * scale_y;
 
-  int x1 = floor(c_offset);
-  int y1 = floor(r_offset);
-  int x2 = ceil(c_offset);
-  int y2 = ceil(r_offset);
+  float x_floor = floor(x);
+  float y_floor = floor(y);
+  float x_ceil = x_floor + 1;
+  float y_ceil = y_floor + 1;
 
-  float dx = c_offset - (float)x1;
-  float dy = r_offset - (float)y1;
+  float w_floor_x = x - x_floor;
+  float w_ceil_x = x_ceil - x;
 
-  x1 %= TILE_X;
-  y1 %= TILE_Y;
-  x2 %= TILE_X;
-  y2 %= TILE_Y;
+  float w_floor_y = y - y_floor;
+  float w_ceil_y = y_ceil - y;
 
-  float dxp = (1 - dx);
-  float dyp = (1 - dy);
+  int x1 = ((int)x_floor ^ c) % TILE_X;
+  int y1 = (int)y_floor % TILE_Y;
+  int x2 = ((int)x_ceil ^ c) % TILE_X;
+  int y2 = (int)y_ceil % TILE_Y;
+
 
   T ap = ATile[y1][x1];
   T bp = ATile[y1][x2];
@@ -78,7 +80,7 @@ swizzle_bilinear_interpolation(const T *__restrict__ A, int input_rows,
   T dp = ATile[y2][x2];
 
   // The Parallel Method to Reduce Individual Elements Products into a Final Sum???
-  T pixel = ap * dxp * dyp + bp * dx * dyp + cp * dy * dxp + dp * dx * dy;
+  T pixel = (ap * (w_ceil_x * w_ceil_y)) + (bp * (w_ceil_x * w_floor_y)) + (cp * (w_floor_x * w_ceil_y)) + (dp * (w_floor_x * w_floor_y));
   int B_linear_idx = r * out_cols + c;
 
   B[B_linear_idx] = pixel;
@@ -133,7 +135,7 @@ void launch_swizzle_bilinear() {
 
   initialize_matrix(A, Rows, Cols);
   std::cout << "Matrix A: " << std::endl;
-  print_matrix<T, TILE_Y>(A, Rows, Cols);
+  // print_matrix<T, TILE_Y>(A, Rows, Cols);
 
   T *A_device, *B_device;
 
