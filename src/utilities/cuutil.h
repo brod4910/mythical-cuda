@@ -1,0 +1,1 @@
+int div_up(int a, int b) { return (a + b - 1) / b; }
