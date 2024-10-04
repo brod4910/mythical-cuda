@@ -45,51 +45,72 @@ __global__ void
 bilinear_interpolation_v2(const T *__restrict__ A, int input_rows,
                                int input_cols, T *__restrict__ B, int out_rows,
                                int out_cols, float scale_y, float scale_x) {
+  __shared__ T tile[TILE_Y][TILE_X];
+
   int r = blockDim.y * blockIdx.y + threadIdx.y;
   int c = blockDim.x * blockIdx.x + threadIdx.x;
   
-  float num_pixels_x = (out_cols - 1.f) / (input_cols - 1.f); // 8 out pixels in x use 1 input pixel
-  float num_pixels_y = (out_rows - 1.f) / (input_rows - 1.f); // 8 out pixels in y use 1 input pixel 
+  float in_scale_x = (out_cols - 1.f) / (input_cols - 1.f); // 8 out pixels in x use 1 input pixel
+  float in_scale_y = (out_rows - 1.f) / (input_rows - 1.f); // 8 out pixels in y use 1 input pixel 
+  
+  int tile_y = r % TILE_Y;
+  int tile_x = c % TILE_X;
 
-  int x_floor = c;
-  int y_floor = r;
-  int x_ceil = x_floor + 1;
-  int y_ceil = y_floor + 1;
+  tile[tile_y][tile_x] = __ldg(&A[r * input_cols + c]);
 
-  T ap = __ldg(&A[y_floor * input_cols + x_floor]);
-  T bp = __ldg(&A[y_floor * input_cols + x_ceil]);
-  T cp = __ldg(&A[y_ceil * input_cols + x_floor]);
-  T dp = __ldg(&A[y_ceil * input_cols + x_ceil]);
+  __syncthreads();
 
-  float start_y = r * num_pixels_y;
-  float start_x = c * num_pixels_x;
+  // int x_floor = c;
+  // int y_floor = r;
+  // int x_ceil = x_floor + 1;
+  // int y_ceil = y_floor + 1;
 
-  if (start_y + num_pixels_y > out_cols || start_x + num_pixels_x > out_rows) {
-    return;
-  }
+  int out_y = in_scale_y * r;
+  int out_x = in_scale_x * c;
 
-  for (int i = 0; i < (int)num_pixels_y; ++i) {
-    float out_y = start_y + i;
+  int num_y = in_scale_y;
+  int num_x = in_scale_x;
 
-    int out_y_floor = floor(out_y);
-    for (int j = 0; j < (int)num_pixels_x; ++j) {
-      float out_x = start_x + j;
-      int out_x_floor = floor(out_x);
+  for (int i = 0; i < num_y; ++i) {
+    int sy = (out_y + num_y * i) + threadIdx.y;
+    float y = sy * scale_y;
 
-      float d_x = out_x - out_x_floor;
-      float d_y = out_y - out_y_floor;
+    if (sy >= out_rows) {
+      return;
+    }
+
+    for (int j = 0; j < num_x; ++j) {
+      int sx = (out_x + num_x * j) + threadIdx.x;
+
+      if (sx >= out_cols) {
+        return;
+      }
+
+      float x = sx * scale_x;
+
+      float d_x = x - c;
+      float d_y = y - r;
 
       float w00 = (1 - d_x) * (1 - d_y);
       float w01 = d_x * (1 - d_y);
       float w10 = (1 - d_x) * d_y;
       float w11 = d_x * d_y;
+
+      int tfx = (int)floor(x) % TILE_X;
+      int tfy = (int)floor(y) % TILE_Y;
+
+      T ap = tile[tfy][tfx];
+      T bp = tile[tfy][tfx + 1];
+      T cp = tile[tfy + 1][tfx];
+      T dp = tile[tfy + 1][tfx + 1];
+
       T q00 = ap * w00;
       T q01 = bp * w01;
       T q10 = cp * w10;
       T q11 = dp * w11;
 
       T pixel = q00 + q01 + q10 + q11;
-      B[out_y_floor * out_cols + out_x_floor] = pixel; 
+      B[sy * out_cols + sx] = pixel;
     }
   }
 }
@@ -124,18 +145,9 @@ void launch_swizzle_bilinear() {
   constexpr float scale_x = (Cols - 1.) / (Out_Cols - 1.);
   constexpr float scale_y = (Rows - 1.) / (Out_Rows - 1.);
   
-  // TODO: only works in the upsampling case since in downsampling,
-  // we sample every Nth input pixel for an output pixel (different access patern).
-  // Using assumption of 128x128 -> 1024x1024
-  constexpr int num_pixels_x = (Out_Cols - 1.) / (Cols - 1.); // 8 out pixels in x use 1 input pixel
-  constexpr int num_pixels_y = (Out_Rows - 1.) / (Rows - 1.); // 8 out pixels in y use 1 input pixel 
-
-  // for every 1 thread, we process 8 elements in the output.
-  // so for block dimenions 32x32 -> we can process 192x192 output pixels
-
   dim3 threadsPerBlock(TILE_X, TILE_Y);
-  dim3 blocksPerGrid(div_up(Rows, threadsPerBlock.y),
-                     div_up(Cols, threadsPerBlock.x));
+  dim3 blocksPerGrid(div_up(Cols, threadsPerBlock.x), 
+                     div_up(Rows, threadsPerBlock.y));
 
   bilinear_interpolation_v2<T, TILE_X, TILE_Y>
       <<<blocksPerGrid, threadsPerBlock>>>(
@@ -157,8 +169,8 @@ int main() {
   constexpr int out_rows = 1024;
   constexpr int out_cols = 1024;
 
-  constexpr int TILE_X = 32;
-  constexpr int TILE_Y = 32;
+  constexpr int TILE_X = 4;
+  constexpr int TILE_Y = 4;
 
   launch_swizzle_bilinear<float, rows, cols, out_rows, out_cols, TILE_X,
                           TILE_Y>();
