@@ -10,7 +10,7 @@ import shutil
 # Create an index matrix to track colors for each element (used for color visualization only)
 def create_index_matrix(matrix):
     num_rows, num_cols = matrix.shape
-    index_matrix = np.tile(np.arange(num_cols), (num_rows, 1))  # Create a matrix where each column has its index
+    index_matrix = np.tile(np.arange(num_rows).reshape(-1, 1), (1, num_cols))
     return index_matrix
 
 
@@ -48,7 +48,8 @@ def visualize_matrices(matrix, index_matrix, colors, step, output_dir):
     ax1 = axes[0]
     for i in range(matrix.shape[0]):
         for j in range(matrix.shape[1]):
-            ax1.add_patch(plt.Rectangle((j, i), 1, 1, color=colors[index_matrix[i, j]], ec='black'))
+            cell_color = 'white' if matrix[i, j] == -1 else colors[index_matrix[i, j]]
+            ax1.add_patch(plt.Rectangle((j, i), 1, 1, color=cell_color, ec='black'))
             ax1.text(j + 0.5, i + 0.5, str(matrix[i, j]), ha='center', va='center', color='black', fontsize=text_size)
     ax1.set_xlim(0, matrix.shape[1])
     ax1.set_ylim(0, matrix.shape[0])
@@ -66,7 +67,8 @@ def visualize_matrices(matrix, index_matrix, colors, step, output_dir):
     ax2 = axes[1]
     for i in range(index_matrix.shape[0]):
         for j in range(index_matrix.shape[1]):
-            ax2.add_patch(plt.Rectangle((j, i), 1, 1, color=colors[index_matrix[i, j]], ec='black'))
+            cell_color = 'white' if matrix[i, j] == -1 else colors[index_matrix[i, j]]
+            ax2.add_patch(plt.Rectangle((j, i), 1, 1, color=cell_color, ec='black'))
             ax2.text(j + 0.5, i + 0.5, str(index_matrix[i, j]), ha='center', va='center', color='black', fontsize=text_size)
     ax2.set_xlim(0, index_matrix.shape[1])
     ax2.set_ylim(0, index_matrix.shape[0])
@@ -126,11 +128,51 @@ def create_gif(output_dir, gif_filename, duration=1.0):
         images.append(imageio.imread(filename))
     
     # Create the GIF with adjustable duration between frames
-    imageio.mimsave(gif_filename, images, fps=duration)
+    imageio.mimsave(gif_filename, images, fps=duration, loop=0)
 
 # Function to generate a random matrix for testing
 def generate_matrix(rows, cols):
     return np.arange(0, cols * rows).reshape(rows, cols)
+
+def process_and_update_matrix(matrix, xor_matrix, index_matrix, output_dir, colors, chunk_rows, chunk_cols):
+    num_rows, num_cols = matrix.shape
+    new_matrix = np.copy(matrix)
+    new_index_matrix = np.copy(index_matrix)
+
+    step = 0
+    # Visualize the initial unmodified matrix
+    visualize_matrices(new_matrix, new_index_matrix, colors, step=step, output_dir=output_dir)
+    step += 1
+
+    # Iterate over the matrix in NxM chunks
+    for row_start in range(0, num_rows, chunk_rows):
+        for col_start in range(0, num_cols, chunk_cols):
+            # Determine the actual size of the chunk (might be smaller at edges)
+            row_end = min(row_start + chunk_rows, num_rows)
+            col_end = min(col_start + chunk_cols, num_cols)
+
+            # Process each element in the chunk by applying the XOR operation
+            for i in range(row_start, row_end):
+                for j in range(col_start, col_end):
+                    # Calculate local row and column within the chunk
+                    local_row = i - row_start
+                    local_col = j - col_start
+                    xor_result = local_row ^ local_col
+
+                    # Handle out-of-bounds XOR results within the chunk
+                    if xor_result >= (col_end - col_start):
+                        new_matrix[i, j] = -1
+                        new_index_matrix[i, j] = -1  # Set index to -1 for out-of-bounds within the chunk
+                    else:
+                        # Calculate the global column index within the chunk bounds
+                        target_col = col_start + xor_result
+                        new_matrix[i, j] = matrix[i, target_col]
+                        new_index_matrix[i, j] = index_matrix[i, target_col]
+
+            # Visualize the updated main matrix after processing each chunk
+            visualize_matrices(new_matrix, new_index_matrix, colors, step=step, output_dir=output_dir)
+            step += 1
+
 
 # Main function to handle command-line arguments
 def main():
@@ -143,6 +185,10 @@ def main():
     parser.add_argument('--duration', type=float, default=1.0, help='Duration of each frame in seconds for the GIF')
     parser.add_argument('--color-cap', type=int, default=32, help='Caps the number of colors')
     parser.add_argument('--color-repeat', action="store_true", help='repeats color pallete')
+    parser.add_argument('--transpose-data', action="store_true", help='transposes the matrices')
+    parser.add_argument('--transpose-index', action="store_true", help='transposes the matrices')
+    parser.add_argument('--chunk-rows', type=int, default=None, help='Number of rows in each chunk')
+    parser.add_argument('--chunk-cols', type=int, default=None, help='Number of columns in each chunk')
     
     args = parser.parse_args()
     args.gif = f"matrix-xor-{args.rows}x{args.cols}.gif"
@@ -150,23 +196,29 @@ def main():
     # Create output directory if it doesn't exist
     if os.path.exists(args.output_dir):
         shutil.rmtree(args.output_dir)
-
     os.makedirs(args.output_dir)
 
     # Generate a random matrix of specified size
     matrix = generate_matrix(args.rows, args.cols)
     index_matrix = create_index_matrix(matrix)
+    if args.transpose_data:
+        matrix = matrix.T
+    if args.transpose_index:
+        index_matrix = index_matrix.T
 
     # Create the XOR matrix
     xor_matrix = create_xor_matrix(matrix)
     colors = create_32_color_palette(args.cols, args.color_cap, args.color_repeat)
     
-    # Create a new matrix and generate images for the GIF
-    create_new_matrix_and_gif(matrix, xor_matrix, index_matrix, args.output_dir, colors)
+    # Determine if processing in chunks or the whole matrix
+    if args.chunk_rows and args.chunk_cols:
+        process_and_update_matrix(matrix, xor_matrix, index_matrix, args.output_dir, colors, args.chunk_rows, args.chunk_cols)
+    else:
+        # Process the whole matrix as a single chunk if no chunk size is provided
+        create_new_matrix_and_gif(matrix, xor_matrix, index_matrix, args.output_dir, colors)
 
     # Create the GIF from the saved images
     create_gif(args.output_dir, args.gif, duration=args.duration)
-
     print(f"GIF created: {args.gif}")
 
 if __name__ == '__main__':
